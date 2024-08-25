@@ -7,7 +7,7 @@ from .language_model import GenerateOutput, LanguageModel
 
 class AnyOpenAILLM(LanguageModel):
     def __init__(self, model_name:str, **kwargs):
-        super().__init__(model_name)
+        super().__init__(model_name, cache= kwargs.pop("cache", False), log=kwargs.pop('log', False), token_usage=kwargs.pop("token_usage", False))
         self.client = self._get_client(model_name)
         
         # config
@@ -46,14 +46,11 @@ class AnyOpenAILLM(LanguageModel):
         else:
             raise ValueError(f"Model {model_name} is not supported")
         
-    def generate(self,
+    def _generate(self,
                 usr_msg: str,
                 system_msg: str = '', 
                 history: Optional[List[str]] = None, 
                 **kwargs: Any) -> GenerateOutput:
-        
-
-
         if not history:
             messages= [{"role": "system", "content": system_msg}, 
                       {"role": "user", "content": usr_msg} ]

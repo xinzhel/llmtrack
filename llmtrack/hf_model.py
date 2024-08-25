@@ -47,7 +47,7 @@ class HFModel(LanguageModel):
         self.device = device
         self.model.eval()
         
-    def generate(
+    def _generate(
             self,
             inputs: list[str],
             max_length: Optional[int] = None,
