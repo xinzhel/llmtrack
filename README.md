@@ -26,6 +26,21 @@ Public LLM APIs are specified by simply specifying `model_name` consisting of AP
 * MoonShot, e.g., "moonshot/moonshot-v1-8k" 
     *  The environment variable has to be setup: `MOONSHOT_API_KEY`
 
+## Unified Parameters
+| Parameter              | Description                                                                                 |
+|------------------------|---------------------------------------------------------------------------------------------|
+| `num_return_sequences`  | Number of sequences to return, defaults to 1. Same as `n` in OpenAI API                     |
+| `temperature`           | More random if < 1.0; more deterministic if > 1.0                                           |
+| `max_tokens`            | Maximum number of tokens to generate                                                        |
+| `top_p`                 | Top p for sampling, refer to the paper: [https://arxiv.org/abs/1904.09751](https://arxiv.org/abs/1904.09751) |
+| `stop`                  | Stop sequence for generation                                                                |
+
+An example:
+```python
+params = {"temperature": 0.2, "num_return_sequences": 1}
+print(llm.generate("Generate ONLY a random word", **params))
+```
+
 ## Caching
 ```python
 from llmtrack import get_llm

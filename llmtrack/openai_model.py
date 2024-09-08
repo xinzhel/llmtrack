@@ -51,6 +51,7 @@ class AnyOpenAILLM(LanguageModel):
                 system_msg: str = '', 
                 history: Optional[List[str]] = None, 
                 **kwargs: Any) -> GenerateOutput:
+
         if not history:
             messages= [{"role": "system", "content": system_msg}, 
                       {"role": "user", "content": usr_msg} ]

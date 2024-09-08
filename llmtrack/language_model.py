@@ -92,7 +92,8 @@ class LanguageModel(ABC):
                 system_msg: str = '', 
                 history: Optional[List[str]] = None, 
                 max_invocation = 5,
-                **kwargs: Any) -> str:
+                **kwargs: Any) -> Union[str, list[str]]: # list if num_return_sequences > 1
+  
         # cache
         if self.cache and system_msg + '\n' + usr_msg in self.cache:
             print("Cache hit!")
@@ -111,8 +112,8 @@ class LanguageModel(ABC):
                     else:
                         print(f"Retry {num_invocation} times.")
                         time.sleep(2**num_invocation)
-                
-            response_txt = llm_output.text[0]
+            
+            response_txt = llm_output.text[0] if kwargs.get("num_return_sequences") == 1 else llm_output.text
             self.cache[system_msg + '\n' + usr_msg] = response_txt
             print("Cache key:", system_msg + '\n' + usr_msg)
 
@@ -121,7 +122,7 @@ class LanguageModel(ABC):
             self.logger.info(self.info_begin, "Prompt:\n%s", system_msg + '\n' + usr_msg, self.info_end)
             self.logger.info(self.info_begin, "Output:\n%s", response_txt, self.info_end)
             
-        return response_txt.strip()
+        return response_txt.strip() if kwargs.get("num_return_sequences") == 1 else [txt.strip() for txt in response_txt]
 
     @abstractmethod
     def get_next_token_logits(self,
