@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar, Union, NamedTuple, Protocol, Optional, runtime_checkable, Tuple
+from typing import Union, NamedTuple, Optional
 from abc import ABC, abstractmethod
 import numpy as np
 from typing import List, Any
@@ -92,11 +92,13 @@ class LanguageModel(ABC):
                 system_msg: str = '', 
                 history: Optional[List[str]] = None, 
                 max_invocation = 5,
+                verbal=False,
                 **kwargs: Any) -> Union[str, list[str]]: # list if num_return_sequences > 1
   
         # cache
         if self.cache and system_msg + '\n' + usr_msg in self.cache:
-            print("Cache hit!")
+            if verbal:
+                print("Cache hit!")
             response_txt = self.cache[system_msg + '\n' + usr_msg]
         else:
             # call _generate; if fail, retry 5 times after wait time: 1, 2, 4, 8, 16 with exponential factor  2
@@ -115,7 +117,8 @@ class LanguageModel(ABC):
             
             response_txt = llm_output.text[0] if kwargs.get("num_return_sequences") == 1 else llm_output.text
             self.cache[system_msg + '\n' + usr_msg] = response_txt
-            print("Cache key:", system_msg + '\n' + usr_msg)
+            if verbal:
+                print("Cache key:", system_msg + '\n' + usr_msg)
 
         # log
         if self.logger:

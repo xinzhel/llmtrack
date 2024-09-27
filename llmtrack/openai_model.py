@@ -43,6 +43,11 @@ class AnyOpenAILLM(LanguageModel):
                 api_key = "$MOONSHOT_API_KEY",
                 base_url = "https://api.moonshot.cn/v1",
             )
+        elif model_name.startwith("groq"):
+            from groq import Groq
+            return Groq(
+                api_key=os.environ.get("GROQ_API_KEY"),
+            )
         else:
             raise ValueError(f"Model {model_name} is not supported")
         
@@ -74,6 +79,7 @@ class AnyOpenAILLM(LanguageModel):
             stop=self.config["stop"] if kwargs.get("stop") is None else kwargs.get("stop"),
             n=self.config["num_return_sequences"] if kwargs.get("num_return_sequences") is None else kwargs.get("num_return_sequences"),
         )
+        
 
         # token usage
         if self.token_usage:

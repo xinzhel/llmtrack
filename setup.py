@@ -6,7 +6,9 @@ setup(
     packages=find_packages(),
     install_requires=[
         'diskcache>=5.6.3',
-        'openai>=1.23.1'
+        'openai>=1.23.1',
+        'numpy>=1.26.4',
+        'groq>=0.11.0'
     ],
     include_package_data=True,
     description="A concise description of your package.",

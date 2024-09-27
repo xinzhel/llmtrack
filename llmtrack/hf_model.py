@@ -5,7 +5,6 @@ import copy
 from transformers import AutoTokenizer, GenerationConfig, AutoModelForCausalLM
 import torch
 import numpy as np
-from accelerate import infer_auto_device_map, dispatch_model
 
 from .language_model import LanguageModel,GenerateOutput
 

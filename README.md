@@ -19,12 +19,16 @@ print(llm.generate("Generate ONLY a random word"))
 Public LLM APIs are specified by simply specifying `model_name` consisting of API providers and model names. The supported APIs include :  
 * OpenAI, e.g., "openai/xxxx"  (xxxx should be replaced by specific model names)
     * The environment variable has to be setup: `OPENAI_API_KEY` 
-    * Specific model names: See [the document](https://platform.openai.com/docs/models) 
+    * Popular `model_name`: `gpt-4o-mini`, `gpt-3.5-turbo`
+    * All Available `model_name`: See [the document](https://platform.openai.com/docs/models) 
 * Azure OpenAI, e.g., "azure_openai/chatgpt-4k" 
     * The three environment variables have to be setup: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_API_VERSION`
     * Ask providers for specific model names 
 * MoonShot, e.g., "moonshot/moonshot-v1-8k" 
-    *  The environment variable has to be setup: `MOONSHOT_API_KEY`
+    * The environment variable has to be setup: `MOONSHOT_API_KEY`
+* Groq
+    * Popular `model_name`: `llama3-8b-8192`, `llama3-70b-8192`
+    * All Available `model_name`: See [the document](https://console.groq.com/docs/models)
 
 ## Unified Parameters
 | Parameter              | Description                                                                                 |
