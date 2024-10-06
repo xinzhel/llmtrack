@@ -4,6 +4,7 @@ import numpy as np
 from typing import List, Any
 import json
 import os
+import traceback
 import diskcache as dc
 from .logging_util import setup_logger
 import time
@@ -36,10 +37,16 @@ class GenerateOutput(NamedTuple):
     log_prob: list[np.ndarray] = None
 
 class LanguageModel(ABC):
-    def __init__(self, model_name, log: bool = False, cache: bool = False, token_usage:bool = False, token_usage_file_path=None):
+    def __init__(self, model_name, log: bool = False, cache: bool = False, token_usage:bool = False, token_usage_file_path=None, **kwargs):
         if '/' not in model_name:
             raise ValueError("model_name should be in the format of <api_provider>/<model_name>")
-        self.api_provider, self.model_name = model_name.split('/')
+        names = model_name.split('/')
+        if len(names) == 2:
+            self.api_provider, self.model_name = names[0], names[1]
+        elif len(names) == 1:
+            self.api_provider, self.model_name = 'default', names[1]
+        else:
+            raise 'Incorrect Format for `model_name`'
 
         # for cache textual response
         self.cache = None
@@ -59,6 +66,17 @@ class LanguageModel(ABC):
         self.token_usage = None
         if token_usage:
             self.token_usage = TokenUsageRecord(model_name=self.model_name, file_path=token_usage_file_path)
+            
+        # pre-define config
+        self.config = {
+            "temperature": kwargs.pop("temperature", 1), # < 1.0: more random
+            "max_tokens": kwargs.pop("max_tokens", 2048),
+            "top_p": kwargs.pop("top_p", 0.99),
+            "stop": kwargs.pop("stop", None),
+            "num_return_sequences": kwargs.pop("num_return_sequences", 1),
+        }
+        if kwargs:
+            raise ValueError(f"Arguments for LLM config are not supported: {kwargs}")
             
     def check_usage(self):
         if self.token_usage:
@@ -112,7 +130,8 @@ class LanguageModel(ABC):
                     if num_invocation >= max_invocation:
                         raise e
                     else:
-                        print(f"Retry {num_invocation} times.")
+                        print(traceback.format_tb(e.__traceback__))
+                        print(f"\n\nRetry {num_invocation} times.")
                         time.sleep(2**num_invocation)
             
             response_txt = llm_output.text[0] if kwargs.get("num_return_sequences") == 1 else llm_output.text

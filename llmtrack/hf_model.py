@@ -1,141 +1,123 @@
 from typing import Union, Optional
 import warnings
 import copy
+import time
 
 from transformers import AutoTokenizer, GenerationConfig, AutoModelForCausalLM
 import torch
 import numpy as np
 
-from .language_model import LanguageModel,GenerateOutput
-
+from llmtrack.language_model import LanguageModel,GenerateOutput
 
 class HFModel(LanguageModel):
-    def __init__(self, model_pth, tokenizer_pth=None, device='cuda:0', max_batch_size=1, max_new_tokens=None, max_length=2048, quantized=None, peft_pth=None, load_awq_pth=None):
-        super().__init__()
+    def __init__(self, model_name, device='mps', max_batch_size=1, quantized=None, peft_pth=None, load_awq_pth=None):
         """
         Initializes a new instance of the `HFModel` class.
 
         Args:
-            model_pth (str): The path to the directory containing the pre-trained model.
-            tokenizer_pth (str): The path to the directory containing the pre-trained tokenizer.
-            device (str): The device to use for running the model (e.g. "cpu", "cuda").
-            max_batch_size (int, optional): The maximum batch size to use for inference. Defaults to 1.
-            max_new_tokens (int, optional): The maximum number of new tokens to generate during inference. Defaults to None.
-            max_length (int, optional): The maximum length of the input sequence. Defaults to 2048.
             quantized (str, optional): The type of quantization to use for the model. Can be "8bit", "nf4", "fp4", or "awq". Defaults to None.
             peft_pth (str, optional): The path to the directory containing the pre-trained PEFT model. Defaults to None.
             load_awq_pth (str, optional): The path to the directory containing the pre-trained AWQ model. Defaults to None.
+            
+        TODO:
+        * record token_usages
+        * test get_loglikelihood, get_next_token_logits functions
+        * implement stop (vs eos)
         """
-        if tokenizer_pth is None:
-            tokenizer_pth = model_pth
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_pth, lagacy=False)
-
+        super().__init__(model_name)
+        
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, lagacy=False, padding_side="left") # https://discuss.huggingface.co/t/llama3-so-much-slow-compared-to-ollama/97638/3
+        self.tokenizer.pad_token=self.tokenizer.eos_token
+        self.tokenizer.pad_token_id=self.tokenizer.eos_token_id
+        
         if quantized is None:
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_pth,
+                model_name,
                 device_map="auto",
-                #     load_in_8bit=True,
+                # load_in_8bit=True, # deprecated, pass a `BitsAndBytesConfig` object in `quantization_config` argument
                 torch_dtype=torch.bfloat16
             )
         else:
             raise NotImplementedError(f"Quantization type {quantized} is not supported.")
         
-        self.max_new_tokens = max_new_tokens
         self.max_batch_size = max_batch_size
-        self.max_length = max_length
         self.device = device
         self.model.eval()
         
     def _generate(
-            self,
-            inputs: list[str],
-            max_length: Optional[int] = None,
-            max_new_tokens: Optional[int] = None,
-            do_sample: bool = False,
-            temperature: float = 1.0,
-            top_k: int = 50,
-            top_p: float = 1.0,
-            num_return_sequences: int = 1,
-            eos_token_id: Union[None, str, int, list[str, int]] = None,
-            hide_input: bool = True,
-            output_log_probs: bool = False,
-            **kwargs,
-        ) -> GenerateOutput:
-
-        assert isinstance(inputs, list), 'inputs should be a list of strings'
-        if max_length is None:
-            max_length = self.max_length  
-        if max_new_tokens is None:
-            max_new_tokens = self.max_new_tokens
-
-        # end of token id
-        eos_token_id_input = copy.deepcopy(eos_token_id)
-        eos_token_id = []
-        if eos_token_id_input is not None:
-            if not isinstance(eos_token_id_input, list):
-                eos_token_id_input = [eos_token_id_input]
-            for token in eos_token_id_input:
-                if isinstance(token, str):
-                    tokenized = self.tokenizer.encode(token, add_special_tokens=False)
-                    if len(tokenized) != 1:
-                        warnings.warn(f'the eos_token {repr(token)} is encoded into {tokenized} with length != 1, '
-                                    f'using {tokenized[-1]} as the eos_token_id')
-                    token = tokenized[-1]
-                if isinstance(token, int):
-                    eos_token_id.append(token)
-                else:
-                    warnings.warn(f'the eos_token {repr(token)} is neither str nor int, which is ignored')
-        eos_token_id.append(self.tokenizer.eos_token_id)
-
+                self,
+                usr_msg: str,
+                system_msg: str = 'You are a helpful assistant', 
+                output_log_probs: bool = False,
+                verb_time:bool=False,
+                **kwargs,
+            ):
+        self.model.eval()
         # generation config
-        generation_config = GenerationConfig(
-            max_length=max_length,
-            temperature=temperature,
+        generation_config = dict(
+            temperature=self.config["temperature"] if kwargs.get("temperature") is None else kwargs.get("temperature"),
+            max_length=self.config["max_tokens"] if kwargs.get("max_tokens") is None else kwargs.get("max_tokens"),
+            top_p=self.config["top_p"] if kwargs.get("top_p") is None else kwargs.get("top_p"),
+            max_new_tokens =self.config["max_tokens"] if kwargs.get("max_tokens") is None else kwargs.get("max_tokens"),
+            top_k=50,
+            num_beams=1, # different with `num_return_sequences`?
+            do_sample = False,
             pad_token_id=self.tokenizer.pad_token_id,
             bos_token_id=self.tokenizer.bos_token_id,
-            eos_token_id=eos_token_id,
-            do_sample = do_sample,
-            top_k=top_k,
-            top_p=top_p,
-        )
-        if max_new_tokens is not None:
-            generation_config = GenerationConfig(
-            max_length=max_length,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            pad_token_id=self.tokenizer.pad_token_id,
-            bos_token_id=self.tokenizer.bos_token_id,
-            eos_token_id=eos_token_id,
-            do_sample = do_sample,
-            top_k=top_k,
-            top_p=top_p,
+            eos_token_id=self.tokenizer.eos_token_id,
+            # eos_token_id=self._convert_stop_to_end_token_id(self.config["stop"] if kwargs.get("stop") is None else kwargs.get("stop")),
         )
         
-        if num_return_sequences > 1:
-            assert len(inputs) == 1, 'num_return_sequences > 1 is not supported for multiple inputs'
-            inputs = inputs * num_return_sequences
+        # N samples
+        N = self.config["num_return_sequences"] if kwargs.get("num_return_sequences") is None else kwargs.get("num_return_sequences")
+        chats =[
+            [{"role": "system", "content": system_msg}, 
+              {"role": "user", "content": usr_msg}],
+        ]
+        if N > 1:
+            generation_config['do_sample'] = True
+            chats = chats * N
 
-        # input_ids = self.tokenizer(input_text, return_tensors="pt").to("mps")
-        # model.generate(**input_ids)
-        # output_txt = tokenizer.decode(outputs[0])
-        # return output_txt
-        # unify eos_token
+        # batching + tokenization + inference + decoding
         decoded_list = []
         log_prob_list = []
-        for start in range(0, len(inputs), self.max_batch_size):
-            end = min(start + self.max_batch_size, len(inputs))
-            encoded_inputs = self.tokenizer(inputs[start:end], return_tensors='pt', padding=True).to(self.device)
-            with torch.inference_mode():
-                generation_output = self.model.generate(
-                    **encoded_inputs,
-                    generation_config=generation_config,
-                    output_scores=output_log_probs,
-                    return_dict_in_generate=True,
-                )
-            decoded = self.tokenizer.batch_decode(generation_output.sequences, skip_special_tokens=True)
-            if hide_input:
-                for i in range(end-start):
-                    decoded[i] = decoded[i][len(inputs[start+i]):]
+        for start in range(0, len(chats), self.max_batch_size):
+            # 1. batching
+            end = min(start + self.max_batch_size, len(chats))
+            batch = chats[start:end]
+            
+            # 2. tokenization
+            if verb_time:
+                t0_1=time.time()
+            
+            encoded_inputs=self.tokenizer.apply_chat_template(batch, return_tensors="pt" ,
+                                        add_generation_prompt=True,
+                                        padding=True,
+                                        return_dict=True).to(self.device)
+            # encoded_inputs = self.tokenizer(inputs[start:end], return_tensors='pt', padding=True).to(self.device)
+            if verb_time:
+                t0_2=time.time()
+                print("Tokenization time:",t0_2 - t0_1)
+    
+           # 3. inference
+            if verb_time:
+                t1=time.time()
+
+            generation_output = self.model.generate(
+                encoded_inputs["input_ids"], 
+                attention_mask=encoded_inputs["attention_mask"],
+                output_scores= output_log_probs,
+                return_dict_in_generate=True,
+                **generation_config,
+            )
+
+            if verb_time:
+                t2=time.time()
+                print ("Inference time:", t2-t1)
+                
+            # decoding 
+            decoded = [self.tokenizer.decode(generation_output.sequences[i][len(encoded_inputs["input_ids"][i]):], skip_special_tokens=True) for i in range(len(generation_output.sequences))]
+
             log_prob = None
             if output_log_probs:
                 log_prob = generation_output.scores
@@ -145,6 +127,22 @@ class HFModel(LanguageModel):
             log_prob_list = None
 
         return GenerateOutput(decoded_list, log_prob_list)
+    
+    def _convert_stop_to_end_token_id(self, eos_token_id_input):
+        eos_token_id = []
+        if eos_token_id_input is not None:
+            if not isinstance(eos_token_id_input, list):
+                eos_token_id_input = [eos_token_id_input]
+            for token in eos_token_id_input:
+                tokenized = self.tokenizer.encode(token, add_special_tokens=False)
+                if len(tokenized) != 1:
+                    warnings.warn(f'the eos_token {repr(token)} is encoded into {tokenized} with length != 1, '
+                                f'using {tokenized[-1]} as the eos_token_id')
+                token = tokenized[-1]
+                    
+        eos_token_id.append(self.tokenizer.eos_token_id)
+        return eos_token_id
+        
 
     @torch.no_grad()
     def get_next_token_logits(

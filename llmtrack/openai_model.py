@@ -7,19 +7,8 @@ from .language_model import GenerateOutput, LanguageModel
 
 class AnyOpenAILLM(LanguageModel):
     def __init__(self, model_name:str, **kwargs):
-        super().__init__(model_name, cache= kwargs.pop("cache", False), log=kwargs.pop('log', False), token_usage=kwargs.pop("token_usage", False))
+        super().__init__(model_name, cache= kwargs.pop("cache", False), log=kwargs.pop('log', False), token_usage=kwargs.pop("token_usage", False), **kwargs)
         self.client = self._get_client(model_name)
-        
-        # config
-        self.config = {
-            "temperature": kwargs.pop("temperature", 1), # < 1.0: more random
-            "max_tokens": kwargs.pop("max_tokens", 2048),
-            "top_p": kwargs.pop("top_p", 0.99),
-            "stop": kwargs.pop("stop", None),
-            "num_return_sequences": kwargs.pop("num_return_sequences", 1),
-        }
-        if kwargs:
-            raise ValueError(f"Arguments for LLM config are not supported: {kwargs}")
         
         API_KEY = os.getenv("AZURE_OPENAI_API_KEY", None)
         if API_KEY is None:
@@ -85,7 +74,6 @@ class AnyOpenAILLM(LanguageModel):
         if self.token_usage:
             usage = completion.usage.to_dict()
             self.token_usage.update_usage(prompt_tokens=usage["prompt_tokens"], completion_tokens=usage["completion_tokens"], total_tokens=usage["total_tokens"])
-            
         try:
             # return completion.choices[0].message.content
             return GenerateOutput(
