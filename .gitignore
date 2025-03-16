@@ -6,3 +6,8 @@ build/
 dist/
 llmtrack.egg-info/
 test.py
+cache_llmtrack/
+openai/
+azure_openai/
+moonshot/
+groq/

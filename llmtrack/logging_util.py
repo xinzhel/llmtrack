@@ -2,11 +2,12 @@ import os
 import logging
 from datetime import datetime
 from typing import Optional
+from .config import get_root_dir
 
 LOG_DIR = "logs"
 
 def create_log_dir(name) -> str:
-    subfolder = os.path.join(LOG_DIR, name)
+    subfolder = os.path.join(get_root_dir(), LOG_DIR, name)
     if not os.path.exists(subfolder):
         os.makedirs(subfolder)
     return subfolder

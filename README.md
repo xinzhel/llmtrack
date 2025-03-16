@@ -3,23 +3,55 @@
 </p>
 
 
-**LLMTrack** is a Python package designed to streamline the usage of language models, especially during batch generation. It offers features for easy loading of models, generation caching to optimize performance, detailed logging, and continuous token usage recording on a per-model basis. Whether you're working on research or deploying models in production, EfficientLLM helps you manage and monitor your models efficiently.
+**LLMTrack** is a Python package for enabling caching (avoiding repeated API calls) and recording token usage on a per-model basis. 
+
+> Why do we call it "per-model"? Because we want to track the token usage and cache for each model separately under the root directory, following the rule `{root_dir}/{client name}/{model name}`.
 
 ## Installation
 ```
 pip install llmtrack
 ```
-## LLM Loading
+
+## Root Directory for Saving Cache and Token Usage
+By default, the root directory for saving cache and token usage is the current working directory (`os.getcwd()`). You can change it, as follows:
 ```python
-from llmtrack import get_llm
-llm = get_llm(model_name="openai/gpt-4o-mini")
-print(llm.generate("Generate ONLY a random word"))
+from llmtrack import set_root_dir, get_root_dir
+set_root_dir("~/my_project/llmtrack")
+print(get_root_dir())
 ```
 
+## Caching and Recording Token Usage
+You can use `get_llm` to get a language model instance, as follows:
+
+```python
+from llmtrack import get_llm
+client_name = "openai"
+model_name = "gpt-4o-mini"
+llm = get_llm(f"{client_name}/{model_name}", cache=True, token_usage=True)
+usr_message = "ONLY generate a positve word"
+client_response = llm.respond(usr_message, verbal=True)
+```
+
+After running the code above, the cache and token-usage files will be stored in `~/my_project/llmtrack/openai/gpt-4o-mini`, following the rule `{root_dir}/{client name}/{model name}`. Now, if you invoke the same model with the same prompt, the cache will be used. 
+
+You can check the token usage and cache by:
+```python
+# check token usage
+print('Token Usage')
+usage = llm.token_usage
+print(usage)
+
+# check cache
+print('\n\nCache')
+cache_key = llm.get_cache_key(usr_message)
+print(llm.cache[cache_key])
+```
+
+## Supported Clients and Model Names
 Public LLM APIs are specified by simply specifying `model_name` consisting of API providers and model names. The supported APIs include :  
 * OpenAI, e.g., "openai/xxxx"  (xxxx should be replaced by specific model names)
     * The environment variable has to be setup: `OPENAI_API_KEY` 
-    * Popular `model_name`: `gpt-4o-mini`, `gpt-3.5-turbo`
+    <!-- * Popular `model_name`: `gpt-4o-mini`, `gpt-3.5-turbo` -->
     * All Available `model_name`: See [the document](https://platform.openai.com/docs/models) 
 * Azure OpenAI, e.g., "azure_openai/chatgpt-4k" 
     * The three environment variables have to be setup: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_API_VERSION`
@@ -27,10 +59,10 @@ Public LLM APIs are specified by simply specifying `model_name` consisting of AP
 * MoonShot, e.g., "moonshot/moonshot-v1-8k" 
     * The environment variable has to be setup: `MOONSHOT_API_KEY`
 * Groq
-    * Popular `model_name`: `llama3-8b-8192`, `llama3-70b-8192`
+    <!-- * Popular `model_name`: `llama3-8b-8192`, `llama3-70b-8192` -->
     * All Available `model_name`: See [the document](https://console.groq.com/docs/models)
 
-## Unified Parameters
+<!-- ## Unified Parameters
 | Parameter              | Description                                                                                 |
 |------------------------|---------------------------------------------------------------------------------------------|
 | `num_return_sequences`  | Number of sequences to return, defaults to 1. Same as `n` in OpenAI API                     |
@@ -42,31 +74,7 @@ Public LLM APIs are specified by simply specifying `model_name` consisting of AP
 An example:
 ```python
 params = {"temperature": 0.2, "num_return_sequences": 1}
-print(llm.generate("Generate ONLY a random word", **params))
-```
+print(llm.respond_txt("Generate ONLY a random word", **params))
+``` -->
 
-## Caching
-```python
-from llmtrack import get_llm
-llm = get_llm(model_name="openai/gpt-4o-mini", cache=True)
-print(llm.generate("Generate ONLY a random word "))
-```
-After running the code above, the generation cache will be stored in `cahe_llmtrack/openai/gpt-4o-mini`, following the naming rule `cahe_llmtrack/{API provider}/{model name}`.
-
-If you invoke the same model with the same prompt, the cache will be used. 
-> Note: You can verify this by checking whether token usage increases with the next function: Token Usage Tracking.
-
-## Token Usage Tracking
-```python
-from llmtrack import get_llm
-llm = get_llm("openai/gpt-4o-mini", cache=True, token_usage=True)
-print(llm.generate("Generate ONLY a random word "))
-print(llm.generate("Generate ONLY a random word "))
-```
-Let's track the token usage at the `./gpt-4o-mini_token_usage.json`. Only one record exists, although we invoke the LLM twice.
-```json
-{"prompt": 17, "completion": 4, "total": 21, "time": "2024-08-25 14:02:36"}
-```
-
-## Logging (TBA)
     

@@ -2,13 +2,14 @@ import os
 import openai
 from openai import OpenAI, AzureOpenAI
 import numpy as np
-from typing import Optional, Union, List, Any
-from .language_model import GenerateOutput, LanguageModel
+from typing import Optional, List, Any
+from .language_model import LanguageModel
 
-class AnyOpenAILLM(LanguageModel):
-    def __init__(self, model_name:str, **kwargs):
+class OpenAILLM(LanguageModel):
+    def __init__(self, model_name:str, tool_def: Optional[list] = None, **kwargs):
         super().__init__(model_name, cache= kwargs.pop("cache", False), log=kwargs.pop('log', False), token_usage=kwargs.pop("token_usage", False), **kwargs)
         self.client = self._get_client(model_name)
+        self.tool_def = tool_def
         
         API_KEY = os.getenv("AZURE_OPENAI_API_KEY", None)
         if API_KEY is None:
@@ -39,13 +40,8 @@ class AnyOpenAILLM(LanguageModel):
             )
         else:
             raise ValueError(f"Model {model_name} is not supported")
-        
-    def _generate(self,
-                usr_msg: str,
-                system_msg: str = '', 
-                history: Optional[List[str]] = None, 
-                **kwargs: Any) -> GenerateOutput:
-
+    
+    def _generate_messages(self, usr_msg: str, system_msg: str = '', history: Optional[List[str]] = None):
         if not history:
             messages= [{"role": "system", "content": system_msg}, 
                       {"role": "user", "content": usr_msg} ]
@@ -56,8 +52,16 @@ class AnyOpenAILLM(LanguageModel):
                 messages.append({"role": "user", "content": history[i]})
                 messages.append({"role": "assistant", "content": history[i+1]})
             messages.append({"role": "user", "content": usr_msg})
+        return messages
 
-        completion = self.client.chat.completions.create(
+    def _respond(self,
+                usr_msg: str,
+                system_msg: str = '', 
+                history: Optional[List[str]] = None, 
+                **kwargs: Any):
+
+        messages = self._generate_messages(usr_msg, system_msg, history)
+        client_response = self.client.chat.completions.create(
             model=self.model_name,
             messages=messages ,
             temperature= self.config["temperature"] if kwargs.get("temperature") is None else kwargs.get("temperature"),
@@ -65,49 +69,22 @@ class AnyOpenAILLM(LanguageModel):
             top_p=self.config["top_p"] if kwargs.get("top_p") is None else kwargs.get("top_p"),
             frequency_penalty=0,
             presence_penalty=0,
+            tools=self.tool_def,
             stop=self.config["stop"] if kwargs.get("stop") is None else kwargs.get("stop"),
             n=self.config["num_return_sequences"] if kwargs.get("num_return_sequences") is None else kwargs.get("num_return_sequences"),
         )
         
+        return client_response
 
-        # token usage
-        if self.token_usage:
-            usage = completion.usage.to_dict()
-            self.token_usage.update_usage(prompt_tokens=usage["prompt_tokens"], completion_tokens=usage["completion_tokens"], total_tokens=usage["total_tokens"])
-        try:
-            # return completion.choices[0].message.content
-            return GenerateOutput(
-                text=[choice.message.content for choice in completion.choices],
-                log_prob=None
-                )
-        except:
-            return "[The LLM does not generate response.]"
+    def _extract_log_prob(self, client_response):
+        return None
 
-    def batch_generate(self, messages_list):
-
-        responses = [
-            self.__call__(messages)
-            for messages in messages_list
-        ]
-
-        return responses
+    def _extract_text(self, client_response):
+        return [choice.message.content for choice in client_response.choices]
     
-    def async_run(self):
-        # TODO: the async version is adapted from https://gist.github.com/neubig/80de662fb3e225c18172ec218be4917a
-        raise NotImplementedError
-      
-    
-    def get_next_token_logits(self,
-                              prompt: Union[str, list[str]],
-                              candidates: Union[list[str], list[list[str]]],
-                              **kwargs) -> list[np.ndarray]:
-        prompt = ""
-        return [[0.7, 0.3]] # for yes and no
+    def _extract_token_usage(self, client_response):
+        return (client_response.usage.prompt_tokens, client_response.usage.completion_tokens, client_response.usage.total_tokens)
 
-    def get_loglikelihood(self,
-                    prompt: Union[str, list[str]],
-                    **kwargs) -> list[np.ndarray]:
-        
-        raise NotImplementedError("GPTCompletionModel does not support get_log_prob")
-
+    def _extract_tool_calls(self, client_response):
+        return [choice.message.tool_calls for choice in client_response.choices]
 
